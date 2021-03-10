@@ -1,0 +1,16 @@
+{
+  "main": {
+    "wif": "L3rS5CwV2TN7WYW89GX41XYRURnrRXtVqGCABfVBJnNNXX2e6Dm1",
+    "apiTarget": "metasv",
+    "issueSatoshis": 23000,
+    "transferSatoshis": 23000,
+    "feeb": 1
+  },
+  "test": {
+    "wif": "cPwoKN8RXRAaEL6y3t6U8xU3VbcvqkpyXMVE1yQ6sAHhZzJcToi8",
+    "apiTarget": "whatsonchain",
+    "issueSatoshis": 1000,
+    "transferSatoshis": 1000,
+    "feeb": 1
+  }
+}

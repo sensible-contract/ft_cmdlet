@@ -1,0 +1,153 @@
+import "util.scrypt";
+import "rabin.scrypt";
+import "satotx.scrypt";
+import "payload_ft.scrypt";
+
+
+/**
+* A token protocol based on UTXO model
+*
+* 该合约实现了一个UTXO模式的Token协议，可发行任意多种采用该协议的token。
+* 协议支持Token转账、不同token之间兑换、和另一种NFT兑换、和bsv兑换等功能。
+*
+* 当前合约支持函数如下:
+*    transfer: 将N个UTXO的token转移指定数量给一个地址，并把多余的部分找回另外一个地址
+*
+* 各个函数详细处理逻辑见各自文档。
+*/
+
+contract FT {
+  int rabinPubKey;
+
+  /**
+   * merge:
+   *   codePart, GenesisPart, ownerPkhA, tokenAmount0, TRANSFER
+   *   codePart, GenesisPart, ownerPkhB, tokenAmount1, TRANSFER
+   *    ->
+   *   codePart, GenesisPart, ownerPkh, tokenAmount, TRANSFER
+   *
+   * merge函数允许用户合并2个token，输入为2个TRANSFER，输出为1个TRANSFER.
+   */
+  public function transfer(SigHashPreimage txPreimage,
+    int   preTxUtxoNum,
+    bytes prevouts,
+
+    int[10] preTxUtxoSigArray,  
+    bytes[10] preTxUtxoPaddingArray,
+    bytes[10] preTxUtxoPayloadArray, 
+    bytes[10] preTxUtxoDataPartArray,
+
+    int[10] sideTxUtxoSigArray,  
+    bytes[10] sideTxUtxoPaddingArray,
+    bytes[10] sideTxUtxoPayloadArray, 
+    bytes[10] sideTxUtxoDataPartArray,
+
+    Sig senderSig, PubKey sender,  int tokenSatoshiAmount,
+    Ripemd160 receiver0Pkh, int tokenAmount0,
+    Ripemd160 receiver1Pkh, int tokenAmount1, 
+    Ripemd160 changePkh, int satoshiAmount2) {
+    // this ensures the preimage is for the current tx
+    require(Tx.checkPreimage(txPreimage));
+
+    // read previous locking script
+    bytes lockingScript = Util.scriptCode(txPreimage);
+    PayloadTokenData pl = PayloadToken.load(lockingScript);
+
+    // dataType must be transfer
+    require(pl.dataType == PayloadToken.TRANSFER);
+
+    // authorize
+    require(hash160(sender) == pl.ownerPkh);
+    require(checkSig(senderSig, sender));
+
+    bytes thisOutpoint = Util.outpoint(txPreimage);
+
+    SatoTx st = new SatoTx();
+    int i=0;
+    bool done = false;
+    int allInputAmount = pl.amount;
+    loop(10){
+        if(!done){
+            //todo
+            int preTxUtxoSig = preTxUtxoSigArray[i];
+            bytes preTxUtxoPadding = preTxUtxoPaddingArray[i];
+            bytes preTxUtxoPayload = preTxUtxoPayloadArray[i];
+            bytes preTxUtxoDataPart = preTxUtxoDataPartArray[i];
+
+            int sideTxUtxoSig = sideTxUtxoSigArray[i];
+            bytes sideTxUtxoPadding = sideTxUtxoPaddingArray[i];
+            bytes sideTxUtxoPayload = sideTxUtxoPayloadArray[i];
+            bytes sideTxUtxoDataPart = sideTxUtxoDataPartArray[i];
+
+            bytes pl_outpoint = sideTxUtxoPayload[ : 36];
+            if(pl_outpoint==thisOutpoint){  //如果是当前正在解锁的utxo，校验溯源
+                require(st.verifyGenesis(
+                txPreimage,
+                pl.codeWithGenesisPart,
+                pl.genesisOutpoint,
+                pl.genesisOutputIdx,
+                
+                preTxUtxoSig,
+                preTxUtxoPayload,
+                preTxUtxoPadding,
+                preTxUtxoDataPart,
+                this.rabinPubKey
+                ));
+            }else{  //否则就校验相邻性是否合法
+              require(st.verifySide(      
+                txPreimage,
+                pl.codeWithGenesisPart,
+                pl.genesisOutpoint,
+                prevouts,
+                
+                sideTxUtxoSig,
+                sideTxUtxoPayload,
+                sideTxUtxoPadding,
+                sideTxUtxoDataPart,
+                this.rabinPubKey
+                ));
+              PayloadTokenData plOther = PayloadToken.load(pl.codeWithGenesisPart+sideTxUtxoDataPart);
+              require(plOther.dataType == PayloadToken.TRANSFER);
+              allInputAmount += plOther.amount;
+            }
+            
+
+            i++;
+            if( i >= preTxUtxoNum){
+                done = true;
+            }
+            
+        }
+    }
+
+    require(tokenAmount0 + tokenAmount1 == allInputAmount);
+
+    // 转移token给这笔交易转移的主要对象
+    bytes output0 = b'';
+    if(tokenAmount0>0){
+        pl.ownerPkh = receiver0Pkh;
+        pl.amount = tokenAmount0;
+        bytes outputScript0 = PayloadToken.dump(pl);
+        output0 = Util.buildOutput(outputScript0, tokenSatoshiAmount);
+    }
+    
+    // token找零
+    bytes output1 = b'';
+    if(tokenAmount1>0){
+        pl.ownerPkh = receiver1Pkh;
+        pl.amount = tokenAmount1;
+        bytes outputScript1 = PayloadToken.dump(pl);
+        output1 = Util.buildOutput(outputScript1, tokenSatoshiAmount);
+    }
+    
+    // bsv找零
+    bytes outputScript2 = Util.buildPublicKeyHashScript(changePkh);
+    bytes output2 = Util.buildOutput(outputScript2, satoshiAmount2);
+
+    Sha256 hashOutputs = hash256(output0 + output1 + output2);
+    require(hashOutputs == Util.hashOutputs(txPreimage));
+  }
+
+
+
+}

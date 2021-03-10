@@ -1,0 +1,141 @@
+import "util.scrypt";
+import "rabin.scrypt";
+
+/*
+
+* preTxOutpointPayload 包含了前一个Tx花费的某UTXO的相关内容，数据结构如下：
+*
+*     UTXOTxID+Index, value, scriptHash, SpendByTxID
+*
+* 其中:
+* TxID 32 Bytes
+* Index 4 Bytes
+* value 8 Bytes
+*/
+
+contract SatoTx {
+  //配合token使用的标签
+  static bytes disableUtxoInGenesisTx = b'5b73656e73696e672d636f6e74726163742d76312e302e302d6e66742d636d642d6578616d706c655d';
+
+  /**
+  * 溯源
+  * 查看前一个Tx，是否是GenesisTx；
+  * 或者前一个Tx内，是否有被花费的UTXO的锁定脚本和当前运行的合约锁定脚本一致。
+  */
+  public function verifyGenesis(
+    SigHashPreimage txPreimage,
+    bytes codeWithGenesisPart, 
+    bytes genesisOutpoint, 
+    bytes genesisOutputIdx,
+    int preTxOutpointSig,
+    bytes preTxOutpointPayload,
+    bytes preTxOutpointPadding,
+    bytes preTxOutpointDataPart,
+    int rabinPubKey
+    ) {
+    //分析payload数据
+    int pl_length = len(preTxOutpointPayload);
+    bytes pl_outpoint = preTxOutpointPayload[ : 36];
+    int pl_value = unpack(preTxOutpointPayload[36 : 44]);
+    bytes pl_scriptHash = preTxOutpointPayload[44 : pl_length - 32];
+    bytes pl_byTxId = preTxOutpointPayload[pl_length - 32 : ];
+
+    /* 确保溯源消息超过最短长度 */
+    require(len(pl_scriptHash) > 0);
+
+    // 签名校验溯源消息
+    require(RabinSignature.verifySig(preTxOutpointSig, preTxOutpointPayload, preTxOutpointPadding, rabinPubKey));
+    
+    // 判断溯源信息中的spendByTxId, 必须是当前被花费的UTXO的TxId
+    bytes thisOutpoint = Util.outpoint(txPreimage);
+    require(pl_byTxId == thisOutpoint[ : 32]);
+
+    bool matchGenesis = false;
+
+    /* 检查前一个UTXO，判断是否满足溯源条件之一*/
+    if (pl_outpoint == genesisOutpoint) {
+      /* 如果前一个Tx花费的某UTXO的Outpoint是创世Outpoint */
+
+      require(thisOutpoint[32 : 36] == genesisOutputIdx);
+      /* 并且本Tx花费的UTXO的output index匹配 genesisOutputIdx ，则满足溯源。
+      *
+      * 这样可以限定GenesisTx内，只能创建一个可用合约UTXO。
+      * 避免了GenesisTx内一次创建多个相同的可用issue合约，但同时可能会导致在GenesisTx直接发行的Token无法使用。
+      *
+      * 为了更明确，当前token合约的transfer实现函数溯源检查时已经主动禁用了GenesisTx判断条件。
+      * 调用verifyGenesis的genesisOutpoint参数为'disableUtxoInGenesisTx'。
+      */
+      matchGenesis = true;
+    } else {
+      /* 如果前一个Tx花费的某UTXO的锁定脚本能匹配传入的codeWithGenesisPart，则满足溯源
+      *
+      * 传入的codeWithGenesisPart一定是从本Tx花费的UTXO的锁定脚本中来。
+      */
+      if (pl_scriptHash == hash160(codeWithGenesisPart + preTxOutpointDataPart)) {
+        matchGenesis = true;
+      }
+    }
+    // 溯源检查
+    require(matchGenesis == true);
+  }
+
+    /**
+  * SideCheck
+  * 查看当前Tx其他某输入的锁定脚本情况，需检查：
+  * 1. 提供的sideTxUtxoMsg必须是当前Tx的非正在执行的某一UTXO合约
+  *
+  * 如果锁定脚本不为空（参数：codePart）还需检查：
+  * 2. 提供的sideTxUtxoMsg内必须包含codePart锁定脚本
+  *    如果codePart是当前正在执行的合约，则可实现要求检查的SideCode和当前合约一致
+  *    如果codePart为空，则此时先跳过脚本判断，可在合约内再行通过脚本hash判断合约类型
+  */
+  public function verifySide(
+    SigHashPreimage txPreimage,
+
+    bytes codePart, 
+    bytes genesisOutpoint,
+    bytes prevouts,
+
+    int sideTxUtxoSig,
+    bytes sideTxUtxoPaylod,
+    bytes sideTxUtxoPadding,
+    bytes sideTxUtxoDataPart,
+    int rabinPubKey
+    ) {
+    // this ensures prevouts is the preimage of hashPrevouts
+    // require(b'f0d00155903c1e6a7b154f2f8860c0d9428d5f0c38c7a907639f02f18135f8e0'== Util.hashPrevouts(txPreimage));
+    require(hash256(prevouts) == Util.hashPrevouts(txPreimage));
+
+    //分析payload数据
+    int pl_length = len(sideTxUtxoPaylod);
+    bytes pl_outpoint = sideTxUtxoPaylod[ : 36];
+    int pl_value = unpack(sideTxUtxoPaylod[36 : 44]);
+    bytes pl_scriptHash = sideTxUtxoPaylod[44 : ];
+    
+    require(pl_length > 0);
+
+    // 签名校验sideTxUtxoMsg消息
+    require(RabinSignature.verifySig(sideTxUtxoSig, sideTxUtxoPaylod, sideTxUtxoPadding, rabinPubKey));
+    
+
+    // 不可以是当前正在执行的合约，因为整个脚本数据可以从preimage获取，无需用sideTxUtxoMsg提供
+    bytes thisOutpoint = Util.outpoint(txPreimage);
+    require(pl_outpoint != thisOutpoint);
+
+    // each outpoint: 32 byte txid + 4 byte index
+    int prevOutpointsCount = len(prevouts) / 36;
+    /* 目前Tx最大支持遍历16个input */
+    require(prevOutpointsCount <= 16);
+
+    bool matchSide = true;
+    if(pl_outpoint!=genesisOutpoint){
+      matchSide = (pl_scriptHash == hash160(codePart + sideTxUtxoDataPart));
+    }
+    require(matchSide==true);
+
+  }
+}
+
+
+
+
