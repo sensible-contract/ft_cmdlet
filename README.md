@@ -49,10 +49,13 @@ Options:
     -h, --help     output usage information
 
 Commands:
-genesis 创建 FT
-issue 发行 FT
-transfer 转移 FT
-help [cmd] display help for [cmd]
+
+    genesis 创建 FT
+    issue 发行 FT
+    transfer 转移 FT
+    help [cmd] display help for [cmd]
+
+---
 
 ## 创建
 
@@ -69,6 +72,8 @@ Options:
 ./ft-cmd genesis --network test --genesis_txid 85d788229f0ad3a2c54d284fbdf79f6ab89853c5b03bd19f775034b1426b3d5b --genesis_index 2
 ```
 
+---
+
 ## 发行
 
 Usage: nft-cmd issue [options]
@@ -82,6 +87,8 @@ Options:
 ```
 ./ft-cmd issue --network test --amount 1000
 ```
+
+---
 
 ## 转移
 
@@ -99,7 +106,6 @@ Options:
 
 ```
 ./ft-cmd transfer --network test --addr n2t8bMwAed8VYWgguos9XAXErzQxYgtg7g --wif cPwoKN8RXRAaEL6y3t6U8xU3VbcvqkpyXMVE1yQ6sAHhZzJcToi8 --amount 100
-
 ```
 
 ## 具体例子可查看
