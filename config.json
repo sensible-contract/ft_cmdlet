@@ -7,10 +7,10 @@
     "feeb": 1
   },
   "test": {
-    "wif": "cPwoKN8RXRAaEL6y3t6U8xU3VbcvqkpyXMVE1yQ6sAHhZzJcToi8",
+    "wif": "cSDMbQJBpAXHXEYMiikbZBq3ogpgpdX5bdpKc32JDafrAx7NJKAw",
     "apiTarget": "whatsonchain",
     "issueSatoshis": 1000,
     "transferSatoshis": 1000,
-    "feeb": 1
+    "feeb": 1.5
   }
 }
