@@ -101,7 +101,7 @@ function getProgramOption() {
     let toSendTokenAmount = options.tokenAmount;
     let changeTokenAmount = 0;
 
-    //查询可用的utxo
+    //查询可用的TOKEN-UTXO
     let leftUtxos = UtxoManager.getUtxos(senderPrivKey.toAddress());
     leftUtxos.sort((a, b) => b.tokenAmount - a.tokenAmount);
     let sum = 0;
@@ -243,6 +243,7 @@ function getProgramOption() {
       sideDataParts.push(new Bytes("1d" + sideDataPartHex));
     }
 
+    //合约里限定数组长度为MAX_UTXO_COUNT，必须把空位补齐
     for (let i = utxos.length; i < MAX_UTXO_COUNT; i++) {
       preSigBEs.push(BigInt("0x00"));
       prePaddings.push(new Bytes(""));
@@ -255,6 +256,7 @@ function getProgramOption() {
       sideDataParts.push(new Bytes(""));
     }
 
+    // 遍历inputs中的所有TOKEN-UTXO，对每一个都设置解锁脚本
     for (let i = 0; i < utxos.length; i++) {
       let utxo = utxos[i];
       let curInputIndex = tx.inputs.length - utxos.length + i;
@@ -306,7 +308,7 @@ function getProgramOption() {
       // toHex(senderPkh),
       // changeSatoshis,
       // ]);
-      // 创建解锁
+      // 创建解锁脚本
       let contractObj = ft.ft.transfer(
         new SigHashPreimage(toHex(preimage)),
 
@@ -343,7 +345,8 @@ function getProgramOption() {
       if (ret.success == false) throw ret;
     }
     // throw "SUCCESS";
-    // unlock other p2pkh inputs
+
+    // 解锁其他的 p2pkh inputs
     for (let i = 0; i < tx.inputs.length - utxos.length; i++) {
       ScriptHelper.unlockP2PKHInput(
         ScriptHelper.privateKey,

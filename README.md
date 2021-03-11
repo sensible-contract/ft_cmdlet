@@ -114,6 +114,23 @@ Options:
 
 <a href="https://github.com/sensing-contract/BCP02-Fungible-Token/blob/master/deployments/ft_test_deploy_history.md">测试网部署历史</a>
 
+## 锁定脚本结构
+
+```
+[code part](variable,end with OP_RETURN(0x6a))
+[data part](all 71 bytes)
+	[genesis part](all 41 bytes)
+		prefix 				(1 bytes)  	表示接下来的数据长度：0x28=40
+		pre_txid 			(32 bytes) 	溯源txid
+		output_index 		(4 bytes) 	溯源outputIndex
+		issue_output_index 	(4 bytes)溯源初始发起的Issue输出的outputIdx
+	[payload for TRANSFER](all 30 bytes)
+		prefix 				(1 bytes)  	表示接下来的数据长度：0x1d=29
+		ownerPkh 			(20 bytes) 	持有人地址
+		amount 				(8 bytes) 	数量
+		data_type 			(1 bytes) 	协议类型,TRANSFER=01(MINT=00/TRANSFER=01/SWAP=02/SELL=03)
+```
+
 ## 相关资源
 
 https://github.com/sCrypt-Inc/boilerplate

@@ -20,13 +20,15 @@ contract FT {
   int rabinPubKey;
 
   /**
-   * merge:
-   *   codePart, GenesisPart, ownerPkhA, tokenAmount0, TRANSFER
-   *   codePart, GenesisPart, ownerPkhB, tokenAmount1, TRANSFER
+   * transfer:
+   *   codePart, GenesisPart, senderPkh, dataPartTokenAmount0, TRANSFER
+   *   codePart, GenesisPart, senderPkh, dataPartTokenAmount1, TRANSFER
+   *   ...
    *    ->
-   *   codePart, GenesisPart, ownerPkh, tokenAmount, TRANSFER
+   *   codePart, GenesisPart, receiver0Pkh, tokenAmount0, TRANSFER
+   *   codePart, GenesisPart, receiver1Pkh, tokenAmount1, TRANSFER
    *
-   * merge函数允许用户合并2个token，输入为2个TRANSFER，输出为1个TRANSFER.
+   * transfer函数允许用户合10个TRANSFER，输出为2个TRANSFER.
    */
   public function transfer(SigHashPreimage txPreimage,
     int   preTxUtxoNum,
